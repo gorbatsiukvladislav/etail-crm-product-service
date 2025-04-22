@@ -1,47 +1,42 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
+from app.core.events import (
+    init_redis,
+    close_redis,
+    init_rabbitmq,
+    close_rabbitmq
+)
 from app.api import products
-from config.settings import settings
 
-from app.utils.redis_cache import cache
-from app.utils.rabbitmq import rabbitmq
-from app.core.events import setup_event_handlers
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager for the FastAPI application"""
+    # Startup
+    await init_redis()
+    await init_rabbitmq()
+    
+    yield
+    
+    # Shutdown
+    await close_redis()
+    await close_rabbitmq()
 
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
-)
+def create_application() -> FastAPI:
+    """Create FastAPI application"""
+    app = FastAPI(
+        title="Product Service",
+        description="Product Service API",
+        version="1.0.0",
+        lifespan=lifespan
+    )
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize connections on startup"""
-    await cache.init()
-    await rabbitmq.connect()
-    await setup_event_handlers()
+    # Include routers
+    app.include_router(
+        products.router,
+        prefix="/api/v1/products",
+        tags=["products"]
+    )
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Close connections on shutdown"""
-    await cache.close()
-    await rabbitmq.close()
+    return app
 
-# Set all CORS enabled origins
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include routers
-app.include_router(
-    products.router,
-    prefix=f"{settings.API_V1_STR}/products",
-    tags=["products"]
-)
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+app = create_application()

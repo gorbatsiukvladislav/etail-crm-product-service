@@ -1,23 +1,41 @@
 import logging
-from app.utils.rabbitmq import rabbitmq
 from app.utils.redis_cache import cache
+from app.utils.rabbitmq import rabbitmq
 
 logger = logging.getLogger(__name__)
 
-async def handle_product_event(message):
-    """
-    Handle product events from RabbitMQ
-    """
-    async with message.process():
-        event = message.body.decode()
-        logger.info(f"Received product event: {event}")
-        
-        # Invalidate cache for the product
-        if "product_id" in event:
-            await cache.delete(f"product:{event['product_id']}")
+async def init_redis() -> None:
+    """Initialize Redis connection"""
+    try:
+        await cache.init()
+        logger.info("Redis connection established")
+    except Exception as e:
+        logger.error(f"Failed to initialize Redis: {e}")
+        raise
 
-async def setup_event_handlers():
-    """
-    Setup RabbitMQ event handlers
-    """
-    await rabbitmq.subscribe("product.*", handle_product_event)
+async def close_redis() -> None:
+    """Close Redis connection"""
+    try:
+        await cache.close()
+        logger.info("Redis connection closed")
+    except Exception as e:
+        logger.error(f"Failed to close Redis connection: {e}")
+        raise
+
+async def init_rabbitmq() -> None:
+    """Initialize RabbitMQ connection"""
+    try:
+        await rabbitmq.connect()
+        logger.info("RabbitMQ connection established")
+    except Exception as e:
+        logger.error(f"Failed to initialize RabbitMQ: {e}")
+        raise
+
+async def close_rabbitmq() -> None:
+    """Close RabbitMQ connection"""
+    try:
+        await rabbitmq.close()
+        logger.info("RabbitMQ connection closed")
+    except Exception as e:
+        logger.error(f"Failed to close RabbitMQ connection: {e}")
+        raise

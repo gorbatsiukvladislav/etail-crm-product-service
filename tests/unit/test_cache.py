@@ -1,8 +1,8 @@
 import pytest
 import json
-from app.utils.redis_cache import RedisCache
 
-@pytest.mark.asyncio
+# Добавляем параметр loop_scope к декоратору
+@pytest.mark.asyncio(loop_scope="function")
 async def test_cache_set_get(redis_mock):
     test_key = "test_key"
     test_value = {"name": "Test Product", "price": 100}
@@ -14,7 +14,7 @@ async def test_cache_set_get(redis_mock):
     cached_value = await redis_mock.get(test_key)
     assert json.loads(cached_value) == test_value
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope="function")
 async def test_cache_delete(redis_mock):
     test_key = "test_key"
     test_value = {"name": "Test Product", "price": 100}
@@ -27,7 +27,7 @@ async def test_cache_delete(redis_mock):
     cached_value = await redis_mock.get(test_key)
     assert cached_value is None
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope="function")
 async def test_cache_clear_all(redis_mock):
     # Set multiple values
     test_data = {
@@ -45,7 +45,7 @@ async def test_cache_clear_all(redis_mock):
     for key in test_data:
         assert await redis_mock.get(key) is None
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope="function")
 async def test_cache_invalidate_pattern(redis_mock):
     # Set multiple values with pattern
     test_data = {
@@ -58,7 +58,9 @@ async def test_cache_invalidate_pattern(redis_mock):
         await redis_mock.set(key, json.dumps(value))
     
     # Invalidate only product keys
-    await redis_mock.delete(*[key for key in await redis_mock.keys("product:*")])
+    product_keys = await redis_mock.keys("product:*")
+    if product_keys:
+        await redis_mock.delete(*product_keys)
     
     # Verify product keys are deleted but category remains
     assert await redis_mock.get("product:1") is None
